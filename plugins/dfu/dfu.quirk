@@ -2,6 +2,10 @@
 [DeviceInstanceId=USB\CLASS_FE&SUBCLASS_01]
 Plugin = dfu
 
+# GD32VF103 Rev1
+[DeviceInstanceId=USB\VID_28E9&PID_0189]
+Flags = is-gd32
+
 # Realtek USB camera
 [DeviceInstanceId=USB\VID_0BDA&PID_5850]
 CounterpartGuid = USB\VID_0BDA&PID_5800

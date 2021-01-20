@@ -288,6 +288,7 @@ gboolean
 dfu_target_parse_sectors (DfuTarget *target, const gchar *alt_name, GError **error)
 {
 	DfuTargetPrivate *priv = GET_PRIVATE (target);
+	FuDevice *device = FU_DEVICE (dfu_target_get_device (target));
 	g_autofree gchar *str_debug = NULL;
 	g_auto(GStrv) zones = NULL;
 
@@ -661,6 +662,46 @@ dfu_target_setup (DfuTarget *target, GError **error)
 	if (klass->setup != NULL) {
 		if (!klass->setup (target, error))
 			return FALSE;
+	}
+
+	/* GD32VF103 devices features and peripheral list */
+	if (fu_device_has_custom_flag (device, "is-gd32")) {
+		/*             RB R8 R6 R4  VB V8
+		 * Flash (KB) 128 64 32 16 128 64
+		 *             TB T8 T6 T4  CB C8 C6 C4
+		 * Flash (KB) 128 64 32 16 128 64 32 16
+		 */
+		guint flashsz = 0;
+		gchar secondchar = ' ';
+		DfuSector *sector;
+		if (secondchar == '2') {
+			flashsz = 8;
+		} else if (secondchar == '4') {
+			flashsz = 16;
+		} else if (secondchar == '6') {
+			flashsz = 32;
+		} else if (secondchar == '8') {
+			flashsz = 64;
+		} else if (secondchar == 'B') {
+			flashsz = 128;
+		} else if (secondchar == 'D') {
+			flashsz = 256;
+		} else {
+			g_set_error_literal (error,
+					     FWUPD_ERROR,
+					     FWUPD_ERROR_NOT_SUPPORTED,
+					     "Unknown GD32 sector size");
+			return FALSE;
+		}
+		g_debug ("using GD32 sector size of 0x%x", flashsz * 0x400);
+		sector = dfu_sector_new (0x0, /* addr */
+					 flashsz * 0x400, /* size */
+					 flashsz * 0x400, /* size_left */
+					 0x0, /* zone */
+					 0x0, /* number */
+					 DFU_SECTOR_CAP_READABLE |
+					 DFU_SECTOR_CAP_WRITEABLE);
+		g_ptr_array_add (priv->sectors, sector);
 	}
 
 	/* get string */
