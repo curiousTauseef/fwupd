@@ -16,6 +16,7 @@
 #include "fu-plugin-vfuncs.h"
 
 #include "fu-uefi-bgrt.h"
+#include "fu-uefi-bootmgr.h"
 #include "fu-uefi-common.h"
 #include "fu-uefi-device.h"
 #include "fu-efivar.h"
@@ -70,10 +71,27 @@ fu_plugin_get_results (FuPlugin *plugin, FuDevice *device, GError **error)
 	const gchar *tmp;
 	g_autofree gchar *err_msg = NULL;
 	g_autofree gchar *version_str = NULL;
+	g_autoptr(GError) error_local = NULL;
 
 	/* trivial case */
 	if (status == FU_UEFI_DEVICE_STATUS_SUCCESS) {
 		fu_device_set_update_state (device, FWUPD_UPDATE_STATE_SUCCESS);
+		return TRUE;
+	}
+
+	/* check if something rudely removed our BOOTXXXX entry */
+	if (!fu_uefi_bootmgr_verify_fwupd (&error_local)) {
+		/* Lenovo, grr */
+		if (fu_plugin_check_hwid (plugin, "6de5d951-d755-576b-bd09-c5cf66b27234")) {
+			g_prefix_error (&error_local,
+					"efibootmgr entry missing; "
+					"perhaps Boot Order Lock enabled in the BIOS: ");
+			fu_device_set_update_state (device, FWUPD_UPDATE_STATE_FAILED_TRANSIENT);
+		} else {
+			g_prefix_error (&error_local, "efibootmgr entry missing: ");
+			fu_device_set_update_state (device, FWUPD_UPDATE_STATE_FAILED);
+		}
+		fu_device_set_update_error (device, error_local->message);
 		return TRUE;
 	}
 
